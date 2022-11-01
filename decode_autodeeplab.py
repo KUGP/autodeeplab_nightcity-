@@ -10,6 +10,8 @@ class Loader(object):
         self.args = args
         if self.args.dataset == 'cityscapes':
             self.nclass = 19
+        elif self.args.dataset == 'nightcity':
+            self.nclass = 19
 
         # Resuming checkpoint
         self.best_pred = 0.0

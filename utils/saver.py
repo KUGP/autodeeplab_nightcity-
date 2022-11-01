@@ -15,7 +15,7 @@ class Saver(object):
         self.runs = sorted(glob.glob(os.path.join(self.directory, 'experiment_*')))
         run_id = max([int(x.split('_')[-1]) for x in self.runs]) + 1 if self.runs else 0
 
-        self.experiment_dir = os.path.join(self.directory, 'experiment_{}'.format(str(run_id)))
+        self.experiment_dir = os.path.join(self.directory, 'training_{}'.format(str(run_id)))
         if not os.path.exists(self.experiment_dir):
             os.makedirs(self.experiment_dir)
 

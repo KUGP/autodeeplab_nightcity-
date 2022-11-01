@@ -6,7 +6,7 @@ def obtain_decode_args():
                         choices=['resnet', 'xception', 'drn', 'mobilenet'],
                         help='backbone name (default: resnet)')
     parser.add_argument('--dataset', type=str, default='cityscapes',
-                        choices=['pascal', 'coco', 'cityscapes', 'kd'],
+                        choices=['pascal', 'coco', 'cityscapes', 'kd','nightcity'],
                         help='dataset name (default: pascal)')
     parser.add_argument('--autodeeplab', type=str, default='train',
                         choices=['search', 'train'])

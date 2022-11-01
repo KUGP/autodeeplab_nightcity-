@@ -112,10 +112,12 @@ class newModel(nn.Module):
         # C_prev_prev = 64
         filter_param_dict = {0: 1, 1: 2, 2: 4, 3: 8}
         for i in range(self._num_layers):
+            # print(torch.sum(self.network_arch[i], dim=1))
             level_option = torch.sum(self.network_arch[i], dim=1)
             prev_level_option = torch.sum(self.network_arch[i - 1], dim=1)
             prev_prev_level_option = torch.sum(self.network_arch[i - 2], dim=1)
             level = torch.argmax(level_option).item()
+            # print(level)
             prev_level = torch.argmax(prev_level_option).item()
             prev_prev_level = torch.argmax(prev_prev_level_option).item()
             if i == 0:
@@ -153,10 +155,11 @@ class newModel(nn.Module):
         stem0 = self.stem1(stem)
         stem1 = self.stem2(stem0)
         two_last_inputs = (stem0, stem1)
+        # print(self._num_layers)
         for i in range(self._num_layers):
             two_last_inputs = self.cells[i](two_last_inputs[0], two_last_inputs[1])
-            if i == 2:
-                low_level_feature = two_last_inputs[1]
+            if i == 2: # 2
+                low_level_feature = two_last_inputs[1] # 1
         last_output = two_last_inputs[-1]
         # else:
         return last_output, low_level_feature

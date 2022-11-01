@@ -7,9 +7,10 @@ from operations import NaiveBN
 class Decoder(nn.Module):
     def __init__(self, num_classes, filter_multiplier, BatchNorm=NaiveBN, args=None, last_level=0):
         super(Decoder, self).__init__()
-        low_level_inplanes = filter_multiplier
-        C_low = 48
-        self.conv1 = nn.Conv2d(low_level_inplanes, C_low, 1, bias=False)
+        low_level_inplanes = filter_multiplier # 32
+        C_low = 48 #48
+        # self.conv1 = nn.Conv2d(low_level_inplanes, C_low, 1, bias=False)
+        self.conv1 = nn.Conv2d(640, C_low, 1, bias=False)
         self.bn1 = BatchNorm(48)
         self.last_conv = nn.Sequential(nn.Conv2d(304,256, kernel_size=3, stride=1, padding=1, bias=False),
                                        BatchNorm(256),
@@ -21,6 +22,8 @@ class Decoder(nn.Module):
         self._init_weight()
 
     def forward(self, x, low_level_feat):
+        # print(low_level_feat.size())
+
         low_level_feat = self.conv1(low_level_feat)
         low_level_feat = self.bn1(low_level_feat)
 

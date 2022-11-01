@@ -8,6 +8,7 @@ from retrain_model.decoder import Decoder
 from retrain_model.new_model import get_default_arch, newModel
 
 
+
 class Retrain_Autodeeplab(nn.Module):
     def __init__(self, args):
         super(Retrain_Autodeeplab, self).__init__()
@@ -17,9 +18,10 @@ class Retrain_Autodeeplab(nn.Module):
             print("=> use ABN!")
         if args.net_arch is not None and args.cell_arch is not None:
             net_arch, cell_arch = np.load(args.net_arch), np.load(args.cell_arch)
+            network_path = np.load(args.network_path)
         else:
-            network_arch, cell_arch, network_path = get_default_arch()
-        self.encoder = newModel(network_arch, cell_arch, args.num_classes, 12, args.filter_multiplier, BatchNorm=BatchNorm2d, args=args)
+            net_arch, cell_arch, network_path = get_default_arch()
+        self.encoder = newModel(net_arch, cell_arch, args.num_classes, 12, args.filter_multiplier, BatchNorm=BatchNorm2d, args=args)
         self.aspp = ASPP(args.filter_multiplier * args.block_multiplier * filter_param_dict[network_path[-1]],
                          256, args.num_classes, conv=nn.Conv2d, norm=BatchNorm2d)
         self.decoder = Decoder(args.num_classes, filter_multiplier=args.filter_multiplier * args.block_multiplier,
