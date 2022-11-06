@@ -72,8 +72,13 @@ class NightCitySegmentation(data.Dataset):
     def __getitem__(self, index):
 
         img_path = self.files[self.split][index].rstrip() #Chicago_0002
-        lbl_path = os.path.join(self.annotations_base,
-                                os.path.basename(img_path)[:-4] + '_labelIds.png') #Chicago_0002_labelIds.png'
+
+        if self.split == 'test': #test for nighttime driving dataset
+            lbl_path = os.path.join(self.annotations_base,
+                                os.path.basename(img_path)[:-16] + '_gtCoarse_labelIds.png')
+        else:
+            lbl_path = os.path.join(self.annotations_base,
+                                    os.path.basename(img_path)[:-4] + '_labelIds.png') #Chicago_0002_labelIds.png'
 
         _img = Image.open(img_path).convert('RGB')
         _tmp = np.array(Image.open(lbl_path), dtype=np.uint8)

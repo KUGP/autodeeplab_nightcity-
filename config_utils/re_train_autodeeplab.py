@@ -13,7 +13,7 @@ def obtain_retrain_autodeeplab_args():
                         help='dataset name (default: cityscapes)')
     parser.add_argument('--groups', type=int, default=None, help='num of groups for group normalization')
     # parser.add_argument('--epochs', type=int, default=4000, help='num of training epochs')
-    parser.add_argument('--epochs', type=int, default=100, help='num of training epochs')
+    parser.add_argument('--epochs', type=int, default=500, help='num of training epochs')
     parser.add_argument('--batch_size', type=int, default=16, help='batch size') # 14
     parser.add_argument('--base_lr', type=float, default=0.05, help='base learning rate')
     parser.add_argument('--warmup_start_lr', type=float, default=5e-6, help='warm up learning rate')

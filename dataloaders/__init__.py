@@ -75,7 +75,7 @@ def make_data_loader(args, **kwargs):
             if args.autodeeplab == 'search':
                 return train_loader1, train_loader2, val_loader, test_loader, num_class
             elif args.autodeeplab == 'train':
-                return train_loader, num_class
+                return train_loader,val_loader,test_loader, num_class
         ################################################# cityscapes  #################################################
 
         elif args.dataset == 'cityscapes':
@@ -122,6 +122,6 @@ def make_data_loader(args, **kwargs):
         #     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, **kwargs)
         #     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, **kwargs)
 
-            return train_loader1, train_loader2, val_loader, test_loader, num_class
+            # return train_loader1, train_loader2, val_loader, test_loader, num_class
         else:
             raise NotImplementedError

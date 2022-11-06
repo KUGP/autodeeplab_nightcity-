@@ -19,6 +19,13 @@ from utils.summaries import TensorboardSummary
 from utils.saver import Saver
 from utils.metrics import Evaluator
 
+# print('working with pytorch version {}'.format(torch.__version__))
+# print('with cuda version {}'.format(torch.version.cuda))
+# print('cudnn enabled: {}'.format(torch.backends.cudnn.enabled))
+# print('cudnn version: {}'.format(torch.backends.cudnn.version()))
+
+torch.backends.cudnn.benchmark = True
+
 
 
 
@@ -34,7 +41,7 @@ def main():
     summary = TensorboardSummary(saver.experiment_dir)
     writer = summary.create_summary()
 
-    model_fname = 'data/deeplab_{0}_{1}_v3_{2}_epoch%d.pth'.format(args.backbone, args.dataset, args.exp)
+    model_fname = 'run/{}/{}_epoch%d.pth'.format(args.dataset,args.checkname)
     if args.dataset == 'pascal':
         raise NotImplementedError
     elif args.dataset == 'cityscapes':
@@ -44,7 +51,7 @@ def main():
 
     elif args.dataset == 'nightcity':
         kwargs = {'num_workers': args.workers, 'pin_memory': True, 'drop_last': True}
-        dataset_loader, num_classes = dataloaders.make_data_loader(args, **kwargs)
+        train_loader,val_loader,test_loader, num_classes = dataloaders.make_data_loader(args, **kwargs)
         args.num_classes = num_classes
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
@@ -75,8 +82,8 @@ def main():
                 m.bias.requires_grad = False
     optimizer = optim.SGD(model.module.parameters(), lr=args.base_lr, momentum=0.9, weight_decay=0.0001)
 
-    max_iteration = len(dataset_loader) * args.epochs
-    scheduler = Iter_LR_Scheduler(args, max_iteration, len(dataset_loader))
+    max_iteration = len(train_loader) * args.epochs
+    scheduler = Iter_LR_Scheduler(args, max_iteration, len(train_loader))
     start_epoch = 0
 
     if args.resume:
@@ -91,22 +98,37 @@ def main():
             raise ValueError('=> no checkpoint found at {0}'.format(args.resume))
 
 
+    best_mIoU = 0.0
+    ###################### EPOCHS LOOP ##################
     for epoch in range(start_epoch, args.epochs):
-        epoch_loss = 0.0
-        num_img_tr = len(dataset_loader)
+        # EPOCH loss ...
+        train_loss = 0.0
+        train_Acc = 0.0
+        train_mIoU = 0.0
+
+        val_loss = 0.0
+        val_Acc = 0.0
+        val_mIoU = 0.0
+
+
+        # num_img_tr = len(train_loader)
         losses = AverageMeter()
         evaluator.reset()
-        for i, sample in enumerate(dataset_loader):
+
+        ######### TARGET TRAIN LOOP ##########
+        model.train()
+        print("##################### TRAINING START #####################")
+
+        for i, sample in enumerate(train_loader):
 
             # print("len dataset_loader",len(dataset_loader))   187 for nightcity with batch_size 16
 
-            cur_iter = epoch * len(dataset_loader) + i
+            cur_iter = epoch * len(train_loader) + i
             scheduler(optimizer, cur_iter)
             inputs = sample['image'].cuda()
             target = sample['label'].cuda()
             outputs = model(inputs)
-            loss = criterion(outputs, target)
-            epoch_loss += loss.item()
+            loss = criterion(outputs, target.type(torch.long))
             if np.isnan(loss.item()) or np.isinf(loss.item()):
                 pdb.set_trace()
             losses.update(loss.item(), args.batch_size)
@@ -121,62 +143,108 @@ def main():
             targets = target.cpu().numpy()
 
             evaluator.add_batch(targets, pred)
+            Acc = evaluator.Pixel_Accuracy()
+            mIoU = evaluator.Mean_Intersection_over_Union()
+            train_loss += loss.item()
+            train_Acc += Acc
+            train_mIoU += mIoU
+            print('EPOCH: {0}\titer: {1}/{2}\tlr: {3:.6f}\tLOSS: {4:.4f}\tACC: {5}\tmIoU: {6}'.format(epoch+1, i+1,len(train_loader),
+                                                                                                    scheduler.get_lr(optimizer),
+                                                                                                    loss.item(),
+                                                                                                    Acc,mIoU))
+        print('EPOCH: {0}\tAvg_LOSS: {1:.4f}\tAvg_ACC: {2}\tAvg_mIoU: {3}'.format(epoch + 1,train_loss/len(train_loader),
+                                                                                    train_Acc/len(train_loader),
+                                                                                    train_mIoU/len(train_loader)))
 
-            # # Show 10 * 3 inference results each epoch
-            # if i % (num_img_tr // 10) == 0:
-            #     global_step = i + num_img_tr * epoch
-            #     summary.visualize_image(writer, args.dataset, inputs, target, outputs, global_step)
+        writer.add_scalar('train/Avg loss_epoch', train_loss/len(train_loader), epoch+1)
+        writer.add_scalar('train/Avg mIoU', train_mIoU/len(train_loader), epoch+1)
+        writer.add_scalar('train/Avg Acc', train_Acc/len(train_loader), epoch+1)
+
+
+        evaluator.reset()
+        model.eval()
+        print("##################### VALIDATION START #####################")
+        ######### TARGET VAL LOOP ##########
+        with torch.no_grad():
+            for i, sample in enumerate(val_loader):
+                # print("len dataset_loader",len(dataset_loader))   187 for nightcity with batch_size 16
+
+                cur_iter = epoch * len(val_loader) + i
+                scheduler(optimizer, cur_iter)
+                inputs = sample['image'].cuda()
+                target = sample['label'].cuda()
+                outputs = model(inputs)
+                loss = criterion(outputs, target.type(torch.long))
+
+                if np.isnan(loss.item()) or np.isinf(loss.item()):
+                    pdb.set_trace()
+                losses.update(loss.item(), args.batch_size)
+
+
+                pred = outputs.data.cpu().numpy()
+                pred = np.argmax(pred, axis=1)
+                targets = target.cpu().numpy()
+
+
+                evaluator.add_batch(targets, pred)
+                Acc = evaluator.Pixel_Accuracy()
+                mIoU = evaluator.Mean_Intersection_over_Union()
+
+                val_loss += loss.item()
+                val_Acc += Acc
+                val_mIoU += mIoU
+                # # Show 10 * 3 inference results each epoch
+                # if i % (num_img_tr // 10) == 0:
+                #     global_step = i + num_img_tr * epoch
+                #     summary.visualize_image(writer, args.dataset, inputs, target, outputs, global_step)
+                print('EPOCH: {0}\titer: {1}/{2}\tlr: {3:.6f}\tLOSS: {4:.4f}\tACC: {5}\tmIoU: {6}'.format(epoch + 1, i + 1,
+                                                                                                      len(val_loader),
+                                                                                                      scheduler.get_lr(
+                                                                                                          optimizer),
+                                                                                                      loss.item(),
+                                                                                                      Acc, mIoU))
+
+                print('epoch: {0}\t''iter: {1}/{2}\t''lr: {3:.6f}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
+                    epoch + 1, i + 1, len(val_loader), scheduler.get_lr(optimizer), loss=losses))#비교를 위해서
+
+                print('mIoU: {0}  val_mIoU: {1}'.format(mIoU,val_mIoU))
 
 
 
+        print('EPOCH: {0}\tAvg_LOSS: {1:.4f}\tAvg_ACC: {2}\tAvg_mIoU: {3}'.format(epoch + 1,
+                                                                              val_loss / len(val_loader),
+                                                                              val_Acc / len(val_loader),
+                                                                              val_mIoU / len(val_loader)))
 
-            print('epoch: {0}\t''iter: {1}/{2}\t''lr: {3:.6f}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
-                epoch + 1, i + 1, len(dataset_loader), scheduler.get_lr(optimizer), loss=losses))
+        writer.add_scalar('val/Avg loss_epoch', val_loss / len(val_loader), epoch + 1)
+        writer.add_scalar('val/Avg mIoU', val_mIoU / len(val_loader), epoch + 1)
+        writer.add_scalar('val/Avg Acc', val_Acc / len(val_loader), epoch + 1)
 
-        if epoch < args.epochs - 50:
-            is_best = False
-            if epoch % 50 == 0:
-                # torch.save({
-                #     'epoch': epoch + 1,
-                #     'state_dict': model.state_dict(),
-                #     'optimizer': optimizer.state_dict(),
-                # }, model_fname % (epoch + 1))
-
-                saver.save_checkpoint({
-                    'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                }, is_best)
-        else:
-            is_best = False
-            # torch.save({
+        if val_mIoU/len(val_loader) > best_mIoU:
+            best_mIoU = val_mIoU/len(val_loader)
+            # is_best = True
+            # saver.save_checkpoint({
             #     'epoch': epoch + 1,
             #     'state_dict': model.state_dict(),
             #     'optimizer': optimizer.state_dict(),
-            # }, model_fname % (epoch + 1))
-
-            saver.save_checkpoint({
+            # }, is_best)
+            print("########### NEW BEST MODEL FOUND ###########")
+            torch.save({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-            }, is_best)
+            }, model_fname % (epoch + 1))
 
-        Acc = evaluator.Pixel_Accuracy()
-        Acc_class = evaluator.Pixel_Accuracy_Class()
-        mIoU = evaluator.Mean_Intersection_over_Union()
-        FWIoU = evaluator.Frequency_Weighted_Intersection_over_Union()
-        writer.add_scalar('train/total_loss_epoch',epoch_loss/len(dataset_loader), epoch)
-        writer.add_scalar('train/mIoU', mIoU, epoch)
-        writer.add_scalar('train/Acc', Acc, epoch)
-        writer.add_scalar('train/Acc_class', Acc_class, epoch)
-        writer.add_scalar('train/fwIoU', FWIoU, epoch)
-        summary.visualize_image(writer, args.dataset, inputs, target, outputs, epoch)
-        # summary.visualize_image(writer, args.dataset, inputs, target, outputs, epoch)
+
+
+        summary.visualize_image(writer, args.dataset, inputs, target, outputs, epoch+1)
+
 
 
 
         print('reset local total loss!')
-    ### validation code
+
+
 
 
     writer.close()
